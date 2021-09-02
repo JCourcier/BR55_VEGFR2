@@ -1,5 +1,5 @@
 ---
-title: "JeanBon Processing"
+title: "USMI BR55"
 output: html_notebook
 ---
 
@@ -102,6 +102,7 @@ saveRDS(joinned_final, "./processed_datas/joinned_final.rds")
 ```
 ### Read the datas
 The rest of the script can be launched from this cell if full raw data are not available
+Ask the data to the author in order to run the script properly
 
 ```{r}
 source("main.R", echo = F)
@@ -171,11 +172,6 @@ g
 ```
 
 
-
-
-
-
-
 ### Compute the Signal intensity for the late phase
 ```{r}
 g <- ggplot(signals_intensity, aes(x = mean_base, y = mean_init))+
@@ -207,12 +203,6 @@ M <- cor(precoce[, .(peak_intensity, area, time_to_peak, area_wash_in, area_wash
 corrplot(M, method="number")
 
 ```
-
-
-
-
-
-
 
 # Peak intensity
 ```{r}
@@ -377,6 +367,7 @@ statistical_results <- do.call(rbind, lapply(var_list, boxplots_tests, precoce))
 statistical_results
 
 ```
+
 ```{r}
 
 subset_for_plots <- merge(precoce, datas_pvs_long, by.x = c("mouse_id", "day"), by.y = c("souris", "day"))

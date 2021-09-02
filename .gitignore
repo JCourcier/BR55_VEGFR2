@@ -5,4 +5,7 @@
 datas
 output_data
 output_plots
+scanner-data-extract.Rproj
 *.csv
+*.rds
+*._*

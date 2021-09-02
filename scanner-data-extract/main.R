@@ -3,9 +3,9 @@ require(data.table)
 require(dplyr)
 require(ggplot2)
 require(plotly)
-library(RColorBrewer)
-library(ggpubr)
-library(psych)
+require(RColorBrewer)
+require(ggpubr)
+require(psych)
 
 
 
