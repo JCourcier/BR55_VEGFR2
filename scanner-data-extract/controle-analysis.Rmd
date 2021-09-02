@@ -1,0 +1,451 @@
+---
+title: "JeanBon Processing"
+output: html_notebook
+---
+
+
+```{r}
+# Load main functions...
+source("main.R", echo = F)
+```
+
+```{r}
+# Source files location
+source_dir <- "../datas/COHORTE BR55 PRINCIPALE"
+# List recursively all files in sub filders, containing Graph.txt in their name
+files <- list.files(source_dir, recursive = T, full.names = T, pattern = "Graph.txt")
+```
+
+
+
+### Data processing
+```{r}
+# Create a list of dataframes
+dataframes_list <- lapply(files, parse_echo_graphs, test_cohorte = T)
+
+# Concatenate the list of frames into one big frame
+df <- data.frame()
+for(i in 1:length(dataframes_list)){
+  df <- dplyr::bind_rows(df,dataframes_list[[i]] )
+}
+# Remove the useless var
+rm("dataframes_list")
+
+#Convert the data.frame object to data.table object
+setDT(df)
+
+# Convert as numeric de mouse id value
+df[, mouse_id := as.numeric(mouse_id)]
+
+# Correct values for mouse 536 J7, measurements where performed 1 minute earlier
+# Based on observed values, natural decreasing of the signal shouldn't make a huge difference
+df[mouse_id == 536 & day == "J7" & msec > 400000, msec := msec + 60000]
+   
+
+
+# Check if no NAs introduced by numerical casting
+stopifnot(sum(is.na(df[, mouse_id])) == 0)
+
+# Open anapath data
+anapath_data <- data.table::fread("../datas/COHORTE PRINCIPALE ANAPATH.csv")
+   
+# Join the two dataset by mouse id key   
+joinned_datas <- df[anapath_data, on=c(mouse_id = "souris")]
+
+
+# Load groups informations
+Groups <- data.table::fread("mice_groups.csv")
+
+# Set keys for automatic joint
+setkey(Groups, Name)
+setkey(joinned_datas, mouse_id)
+joinned_final <- joinned_datas[Groups,]
+
+
+# Open and read data for poid, volume and surfaces
+datas_pvs <- data.table::fread("../datas/data_souris_poids_volume_surfaces.csv", dec = ",")
+
+table_len <- nrow(datas_pvs)
+
+# Convert wide format for poids and volume to wide
+datas_pvs_long <- rbind(datas_pvs, datas_pvs, datas_pvs, datas_pvs)
+datas_pvs_long$day <- c(rep("J0", table_len), rep("J3", table_len), rep("J7", table_len), rep("J11", table_len))
+datas_pvs_long$poids <- c(datas_pvs$poids_J0, datas_pvs$poids_J3, datas_pvs$poids_J7, datas_pvs$poids_J11)
+datas_pvs_long$volume <- c(datas_pvs$volume_J0, datas_pvs$volume_J3, datas_pvs$volume_J7, datas_pvs$volume_J11)
+
+# Remove previous unused columns
+datas_pvs_long <- datas_pvs_long[, -(3:10)]
+
+
+# Merge thoses datas with joinned final
+joinned_final_t <- merge(joinned_final, datas_pvs_long, by.x = c("mouse_id", "day"), by.y = c("souris", "day"))
+
+
+# Compute late signals intensity
+avg_signals <- c("mean_corrected", "mean_init", "mean_base")
+signals_intensity <- df[msec > 600000, .(mean_corrected = adjusted_mean(.SD)[1], mean_init = adjusted_mean(.SD)[2], mean_base = adjusted_mean(.SD)[3]), by = .(mouse_id, day), .SDcols = c("T", "msec")]
+# write.csv(signals_intensity, "../output_data/bound_signals_test_12082021.csv")
+
+
+signals_intensity <- merge(signals_intensity, Groups, by.x = "mouse_id", by.y = "Name")
+
+
+rm("anapath_data")
+rm("datas_pvs")
+rm("df")
+rm("Groups")
+saveRDS(df, "./processed_datas/df.rds")
+saveRDS(signals_intensity, "./processed_datas/signals_intensity.rds")
+saveRDS(datas_pvs_long, "./processed_datas/datas_pvs_long.rds")
+saveRDS(joinned_final, "./processed_datas/joinned_final.rds")
+
+```
+### Read the datas
+The rest of the script can be launched from this cell if full raw data are not available
+
+```{r}
+source("main.R", echo = F)
+df <- readRDS("./processed_datas/df.rds")
+signals_intensity <- readRDS("./processed_datas/signals_intensity.rds")
+datas_pvs_long <- readRDS("./processed_datas/datas_pvs_long.rds")
+joinned_final <- readRDS("./processed_datas/joinned_final.rds")
+
+```
+
+```{r}
+#Phase tardive
+tardive_joinned <- joinned_final[msec > 600000, ]
+tardive_joinned <- tardive_joinned[, Time := msec / 1000]
+
+tardive_joinned <- tardive_joinned[, Groupe := ifelse(Group == "placebo", "Placebo", ifelse(Group == "demi", "axi 7.5", "axi 15"))]
+
+
+tardive_joinned <- tardive_joinned[, enc_groups := ifelse(Group == "placebo", 1, ifelse(Group == "demi", 2, 3))] 
+
+
+# Create output folder if necessairy
+if(!dir.exists("../output_plots/")) dir.create("../output_plots/")
+```
+### Signals graphs for J11
+```{r}
+# For J11
+g <- plot_graph_signals(tardive = tardive_joinned,
+                        sel_day = "J11",
+                        saving_location = "../output_plots/J11_late_signals.svg")
+
+
+g
+```
+### Signals graphs for J0
+```{r}
+# For J0
+g <- plot_graph_signals(tardive = tardive_joinned,
+                        sel_day = "J0",
+                        saving_location = "../output_plots/J0_late_signals.svg")
+
+
+g
+```
+
+### Signals graphs for J3
+```{r}
+# For J3
+g <- plot_graph_signals(tardive = tardive_joinned,
+                        sel_day = "J3",
+                        saving_location = "../output_plots/J3_late_signals.svg")
+
+
+g
+```
+
+
+### Signals graphs for J7
+```{r}
+# For J7
+g <- plot_graph_signals(tardive = tardive_joinned,
+                        sel_day = "J7",
+                        saving_location = "../output_plots/J7_late_signals.svg")
+
+
+g
+```
+
+
+
+
+
+
+
+### Compute the Signal intensity for the late phase
+```{r}
+g <- ggplot(signals_intensity, aes(x = mean_base, y = mean_init))+
+  geom_point(aes(col = Group))+
+  theme_minimal() +
+  facet_wrap(day ~ .)
+g
+
+```
+
+
+### Correlation plots
+```{r}
+precoce <- joinned_final[msec < 500000, .(peak_intensity = unique(peak_intensity),area = unique(area),Group = unique(Group), time_to_peak = unique(time_to_peak), area_wash_in = unique(area_wash_in), area_wash_out = unique(area_wash_out), mean_transit_time = unique(mean_transit_time)), by = .(mouse_id, day)]
+
+
+precoce <- merge(precoce,signals_intensity, by.x = c("mouse_id", "day"), by.y = c("mouse_id", "day"))
+
+precoce$day <- factor(precoce$day, levels=c("J0", "J3", "J7", "J11"), labels=c("J0", "J3", "J7", "J11"))
+
+
+precoce <- precoce[, Groupe := ifelse(Group.x == "placebo", "Placebo", ifelse(Group.x == "demi", "axi 7.5", "axi 15"))]
+
+precoce$Groupe <- factor(precoce$Groupe, levels=c("Placebo", "axi 7.5", "axi 15"), labels=c("Placebo", "axi 7.5", "axi 15"))
+
+require(corrplot)
+
+M <- cor(precoce[, .(peak_intensity, area, time_to_peak, area_wash_in, area_wash_out, mean_corrected, mean_base, mean_init)])
+corrplot(M, method="number")
+
+```
+
+
+
+
+
+
+
+# Peak intensity
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "peak_intensity",
+#                                       "Peak intensity (a.u)",
+#                                       "../output_plots/peak_intensity.svg")
+# g
+
+g <- variables_comparison_plots(precoce, "peak_intensity", "Peak intensity (a.u)")
+g
+ggsave(file="../output_plots/peak_intensity.svg", plot=g, width=10, height=8)
+```
+
+# Time to peak
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "time_to_peak",
+#                                       "Time to peak (s)",
+#                                       "../output_plots/time_to_peak.svg")
+# g
+
+g <- variables_comparison_plots(precoce, "time_to_peak", "Time to peak (s)")
+g
+ggsave(file="../output_plots/time_to_peak.svg", plot=g, width=10, height=8)
+```
+
+# Mean transit time
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "mean_transit_time",
+#                                       "Mean transit time (s)",
+#                                       "../output_plots/mean_transit_time.svg")
+# g
+
+g <- variables_comparison_plots(precoce, "mean_transit_time", "Mean transition time (s)")
+g
+ggsave(file="../output_plots/mean_transit_time.svg", plot=g, width=10, height=8)
+```
+
+
+# Area
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "area",
+#                                       "Area (a.u)",
+#                                       "../output_plots/area.svg")
+# g
+
+g <- variables_comparison_plots(precoce, "area", "Area under the curve (a.u)")
+g
+ggsave(file="../output_plots/area_under_curve.svg", plot=g, width=10, height=8)
+```
+
+# Area wash in 
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "area_wash_in",
+#                                       "Area wash in (a.u*s)",
+#                                       "../output_plots/area_wash_in.svg")
+# g
+
+
+g <- variables_comparison_plots(precoce, "area_wash_in", "Area wash in (a.u*s)")
+g
+ggsave(file="../output_plots/area_wash_in.svg", plot=g, width=10, height=8)
+
+```
+
+# Area wash out
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "area_wash_out",
+#                                       "Area wash out (a.u*s)",
+#                                       "../output_plots/area_wash_out.svg")
+# g
+
+g <- variables_comparison_plots(precoce, "area_wash_out", "Area wash out (a.u*s)")
+g
+ggsave(file="../area_wash_out.svg", plot=g, width=10, height=8)
+```
+
+# Mean 600s signal
+```{r}
+# g <- plot_variable_per_day_and_groups(precoce,
+#                                       "mean_corrected",
+#                                       "Mean 600s signal (a.u)",
+#                                       "../output_plots/mean_600_signal.svg")
+# g
+g <- variables_comparison_plots(precoce, "mean_corrected", "MBs bound signal (a.u)")
+g
+
+ggsave(file="../output_plots/MBs_bound_signal.svg", plot=g, width=10, height=8)
+```
+
+
+
+```{r}
+# Perform statistical tests... And sum them up in a dataframe
+boxplots_tests <- function(selected_variable, df){
+   groups_names <- c("Placebo", "axi 7.5", "axi 15")
+   days <- c("J0", "J3", "J7", "J11")
+  final_df <- data.table()
+  for(aday in days){
+    # Subset per day
+    subseting <- df[day == aday,]
+    
+    # Perform shapiro test on each group per day
+    rez_shapiro <- sapply(groups_names, FUN = function(x){
+      shapiro.test(subseting[Groupe == x, ][[ selected_variable]])$p.value
+      #ggqqplot(subseting[Groupe == x,][[selected_variable]])
+    })
+    
+    print(paste0(selected_variable, " ~ Groupe"))
+    form <- as.formula(paste0(selected_variable, " ~ Groupe"))
+
+    rez_bartlett <- bartlett.test(form, data = subseting)$p.value
+    
+    # Anova
+    
+    anovas <- aov(form, data = subseting)
+      
+    # Kruskal
+    kruskal <- kruskal.test(form, data = subseting)
+    
+    shapiro_boolean <- rez_shapiro <= 0.05
+    bartlett_boolean <- rez_bartlett <= 0.05
+    
+    # Student Placebo to axi 7.5
+    student_1 <- t.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 7.5",][[ selected_variable]])$p.value
+   
+    # Student Placebo to axi 15
+    student_2 <- t.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
+    
+    # Student axi 7.5 to axi 15
+    student_3 <- t.test(subseting[Groupe == "axi 7.5",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
+    
+    
+    tmp <- data.table(
+              var = selected_variable,
+              day = aday,
+              shapiro_placebo = rez_shapiro[1],
+              shapiro_axi_7 = rez_shapiro[2],
+              shapiro_axi_15 = rez_shapiro[3],
+              bartlett = rez_bartlett,
+              kruskal_pval = kruskal$p.value,
+              anova_Pr = ifelse((sum(shapiro_boolean) == length(unique(subseting$Groupe))) & bartlett_boolean, summary(anovas)[[1]]$`Pr(>F)`[[1]], NA),
+              student_placebo_to_axi_7 = student_1,
+              student_placebo_to_axi_15 = student_2,
+              student_axi_7_to_axi_15 = student_3)
+  
+  final_df <- rbind(final_df, tmp)
+  }
+  return(final_df)
+}
+  
+
+
+var_list <- c("peak_intensity", "area", "area_wash_in", "area_wash_out", "mean_transit_time", "mean_corrected", "time_to_peak")
+
+statistical_results <- do.call(rbind, lapply(var_list, boxplots_tests, precoce))
+statistical_results
+
+```
+```{r}
+
+subset_for_plots <- merge(precoce, datas_pvs_long, by.x = c("mouse_id", "day"), by.y = c("souris", "day"))
+subset_for_plots[, VEGFR_ratio := surface_VEGFR2/surface_tumeur]
+subset_for_plots[, `:=`(date_greffe = as.Date(date_greffe, format = "%d/%m/%Y"),
+                        date_inclusion = as.Date(date_inclusion, format = "%d/%m/%Y"),
+                        date_sacrifice = as.Date(date_sacrifice, format = "%d/%m/%Y")
+                        )]
+subset_j11 <- subset_for_plots[day == "J11", ]
+
+
+regression <- lm(mean_corrected ~VEGFR_ratio, subset_j11)
+summary(regression)
+regression$coefficients
+
+g <- ggplot(subset_j11, aes(y = mean_corrected, x = VEGFR_ratio)) +
+  geom_point(aes(color = Groupe))+
+  geom_abline(intercept = regression$coefficients[1], slope = regression$coefficients[2])+
+  scale_color_manual(values=c("#4373c5", "#ffc002", "#ed7d31"))+
+  theme_minimal()
+  
+g
+ggsave(file="../output_plots/table_correlation.svg", plot=g, width=10, height=8)
+
+# cor.test(subset_j11$mean_corrected, subset_j11$VEGFR_ratio, method = "pearson")
+
+
+
+g <- ggscatter(subset_for_plots[day == "J11", ], x = "VEGFR_ratio", y = "mean_corrected", 
+          add = "reg.line", conf.int = TRUE, 
+          cor.coef = TRUE, cor.method = "pearson",
+          xlab = "VEGFR2 ratio", ylab = "Signal intensity (a.u)"
+          )
+g
+ggsave(file="../output_plots/table_correlation_j11_pearson.svg", plot=g, width=10, height=8)
+```
+
+
+```{r}
+
+pairs.panels(subset_for_plots[, .(peak_intensity,
+                                  area, time_to_peak,
+                                  area_wash_in, area_wash_out,
+                                  mean_corrected, mean_base,
+                                  mean_init, surface_histo,
+                                  surface_echo, surface_tumeur,
+                                  surface_VEGFR2,
+                                  poids,
+                                  volume,
+                                  VEGFR_ratio)
+                              ],
+             smooth = TRUE,      # If TRUE, draws loess smooths
+             scale = FALSE,      # If TRUE, scales the correlation text font
+             density = TRUE,     # If TRUE, adds density plots and histograms
+             ellipses = TRUE,    # If TRUE, draws ellipses
+             method = "pearson", # Correlation method (also "spearman" or "kendall")
+             pch = 21,           # pch symbol
+             lm = FALSE,         # If TRUE, plots linear fit rather than the LOESS (smoothed) fit
+             cor = TRUE,         # If TRUE, reports correlations
+             jiggle = FALSE,     # If TRUE, data points are jittered
+             factor = 2,         # Jittering factor
+             hist.col = 4,       # Histograms color
+             stars = TRUE,       # If TRUE, adds significance level with stars
+             ci = TRUE)
+
+
+
+
+
+
+```
+
