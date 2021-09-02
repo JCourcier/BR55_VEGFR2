@@ -169,7 +169,7 @@ variables_comparison_plots <- function(datas, y_var, yLab){
                  ylab = yLab)
   
   p <- p + stat_compare_means(label.x.npc = 0.8,label.y.npc = 1) +
-    stat_compare_means(comparisons = my_comparisons, method = "t.test") # Add pairwise comparisons
+    stat_compare_means(comparisons = my_comparisons, method = "wilcoxon.test") # Add pairwise comparisons
   return(p)
 }
 

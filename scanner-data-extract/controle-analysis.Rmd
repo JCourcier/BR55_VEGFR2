@@ -331,14 +331,14 @@ boxplots_tests <- function(selected_variable, df){
     shapiro_boolean <- rez_shapiro <= 0.05
     bartlett_boolean <- rez_bartlett <= 0.05
     
-    # Student Placebo to axi 7.5
-    student_1 <- t.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 7.5",][[ selected_variable]])$p.value
+    # Mann Whitney Placebo to axi 7.5
+    Mann_whitney_1 <- wilcoxon.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 7.5",][[ selected_variable]])$p.value
    
-    # Student Placebo to axi 15
-    student_2 <- t.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
+    # Mann Whitney Placebo to axi 15
+    Mann_whitney_2 <- wilcoxon.test(subseting[Groupe == "Placebo",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
     
-    # Student axi 7.5 to axi 15
-    student_3 <- t.test(subseting[Groupe == "axi 7.5",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
+    # Mann Whitney axi 7.5 to axi 15
+    Mann_whitney_3 <- wilcoxon.test(subseting[Groupe == "axi 7.5",][[ selected_variable]], subseting[Groupe == "axi 15",][[ selected_variable]])$p.value
     
     
     tmp <- data.table(
@@ -350,9 +350,9 @@ boxplots_tests <- function(selected_variable, df){
               bartlett = rez_bartlett,
               kruskal_pval = kruskal$p.value,
               anova_Pr = ifelse((sum(shapiro_boolean) == length(unique(subseting$Groupe))) & bartlett_boolean, summary(anovas)[[1]]$`Pr(>F)`[[1]], NA),
-              student_placebo_to_axi_7 = student_1,
-              student_placebo_to_axi_15 = student_2,
-              student_axi_7_to_axi_15 = student_3)
+              Mann_whitney_placebo_to_axi_7 = Mann_whitney_1,
+              Mann_whitney_placebo_to_axi_15 = Mann_whitney_2,
+              Mann_whitney_axi_7_to_axi_15 = Mann_whitney_3)
   
   final_df <- rbind(final_df, tmp)
   }
